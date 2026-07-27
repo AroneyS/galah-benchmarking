@@ -1,9 +1,7 @@
 test/
 results/
 data/
-*chunking/
-DeepOceanGenomes/
-DeepOceanAssemblies/
+.pixi/
 
 .vscode/
 .Rhistory
@@ -20,4 +18,3 @@ null/
 *.xlsx
 *.png
 *.fq.gz
-
