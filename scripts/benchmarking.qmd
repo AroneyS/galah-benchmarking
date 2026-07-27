@@ -1,0 +1,563 @@
+---
+title: "Galah benchmarking"
+author: "Samuel Aroney"
+date: "`r format(Sys.time(), '%d %B %Y')`"
+format:
+  html:
+    code-fold: true
+execute:
+  echo: False
+---
+
+```{r setup}
+#! include: false
+
+library(cowplot)
+library(tidyverse)
+library(here)
+
+theme_set(theme_cowplot(font_family = "sans"))
+
+output_dir <- here("results", "benchmarking_qmd", "20260727")
+dir.create(output_dir, recursive = TRUE)
+
+# Colour Brewer paired palette
+colour_brewer <- setNames(append(as.list(RColorBrewer::brewer.pal(12, "Paired")), c("#737373", "#FFFFFF", "#000000")), c("blue", "darkblue", "green", "darkgreen", "red", "darkred", "orange", "darkorange", "purple", "darkpurple", "yellow", "brown", "grey", "white", "black"))
+# Paul Tol's vibrant palette - colourblind friendly
+vibrant_colours <- c("#CC3311", "#0077BB", "#009988", "#EE3377", "#EE7733", "#33BBEE")
+# Paul Tol's muted palette - plus 3 extras
+muted_colours <- c("#882255", "#332288", "#DDCC77", "#117733", "#88CCEE", "#CC6677", "#44AA99", "#999933", "#AA4499", "#BBBBBB", "#EE7733", "#CC3311")
+# Paul Tol's bright palette - colourblind friendly
+bright_colours <- c("#4477AA", "#EE6677", "#228833", "#CCBB44", "#66CCEE", "#AA3377", "#BBBBBB")
+
+# galah_reference (galah's dedicated --reference-genomes mode) is treated as
+# its own tool rather than a ref=TRUE variant of "galah", since it's a
+# different run to galah_globdb (which just concatenates inputs).
+tool_levels <- c("galah", "galah_low_memory", "skder_greedy", "drep_skani", "pyani_ANIm", "galah_reference")
+tool_labels <- c("galah", "galah (low memory)", "skder (greedy)", "dRep (skani)", "pyani (ANIm)", "galah (reference)")
+tool_colours <- setNames(vibrant_colours[seq_len(length(tool_labels))], tool_labels)
+```
+
+```{r wrangling}
+genomes_metadata <- read_tsv("/work/microbiome/ibis/SRA_genomes/compiled/genome_metadata.tsv") %>%
+  filter(completeness - 5 * contamination >= 50)
+
+benchmarking_root <- here("results", "benchmarking", "20260618")
+
+# Total genomes in the GlobDB r232 reference set, added to every sample in
+# the reference-based (GlobDB) runs.
+n_ref_genomes <- 346233
+
+benchmarking <- list.files(here(benchmarking_root, "benchmarks"), recursive=TRUE, full.names=TRUE) %>%
+  as_tibble() %>%
+  mutate(
+    raw_tool = str_extract(value, "(?<=benchmarks/)[^/]+"),
+    # "_globdb" directories are the same tool clustered together with the
+    # GlobDB reference set; galah_reference is kept as-is (see tool_levels).
+    ref = str_detect(raw_tool, "_globdb$") | raw_tool == "galah_reference",
+    tool = str_remove(raw_tool, "_globdb$"),
+    size = str_extract(value, "(?<=cluster_)[^_]+") %>% as.integer(),
+    rep = str_extract(value, "(?<=_rep)[^.]+") %>% as.integer(),
+    data = map(value, ~ read_tsv(.x, col_types = cols(`h:m:s` = col_character())))
+    ) %>%
+  unnest(data) %>%
+  select(tool, ref, size, rep, s, cpu_time, max_rss, max_vms)
+
+#-------------------------------------------------------------------------------
+# Cluster counts: derive the number of clusters formed by each tool's run from
+# its raw output (rather than a summary file), since each tool reports its
+# clustering result in a different format.
+#-------------------------------------------------------------------------------
+count_galah_clusters <- function(path) {
+  f <- file.path(path, "clusters.tsv")
+  if (!file.exists(f) || file.size(f) == 0) return(NA_integer_)
+  reps <- read_tsv(f, col_names = c("rep", "member"), col_types = "c_", show_col_types = FALSE)$rep
+  n_distinct(reps)
+}
+
+count_drep_clusters <- function(path) {
+  d <- file.path(path, "dereplicated_genomes")
+  if (!dir.exists(d)) return(NA_integer_)
+  n <- length(list.files(d))
+  if (n == 0) return(NA_integer_)
+  n
+}
+
+count_skder_clusters <- function(path) {
+  d <- file.path(path, "skder", "Dereplicated_Representative_Genomes")
+  if (!dir.exists(d)) return(NA_integer_)
+  n <- length(list.files(d))
+  if (n == 0) return(NA_integer_)
+  n
+}
+
+count_pyani_clusters <- function(path) {
+  f <- file.path(path, "classify", "ANIm_classify.tsv")
+  if (!file.exists(f)) return(NA_integer_)
+  n <- length(read_lines(f)) - 1
+  if (n <= 0) return(NA_integer_)
+  n
+}
+
+input_genomes <- read_tsv("/work/microbiome/ibis/SRA_genomes/compiled/genome_metadata.tsv") %>%
+  filter(completeness - 5 * contamination >= 50) %>%
+  pull(name)
+
+count_galah_clusters_ref <- function(path) {
+  f <- file.path(path, "clusters.tsv")
+  if (!file.exists(f) || file.size(f) == 0) return(NA_integer_)
+  reps <- read_tsv(f, col_names = c("rep", "member"), col_types = "cc", show_col_types = FALSE) %>%
+    mutate(genome_name = str_extract(member, "(?<=/)[^/]+(?=.fna)")) %>%
+    filter(genome_name %in% input_genomes) %>%
+    pull(rep)
+
+  n_distinct(reps)
+}
+
+count_clusters <- function(ref, tool, path) {
+  if (ref) {
+    switch(tool,
+      galah = , galah_low_memory = , galah_reference = count_galah_clusters_ref(path),
+      NA_integer_
+    )
+  } else {
+    switch(tool,
+      galah = , galah_low_memory = , galah_reference = count_galah_clusters(path),
+      drep_skani = count_drep_clusters(path),
+      skder_greedy = count_skder_clusters(path),
+      pyani_ANIm = count_pyani_clusters(path),
+      NA_integer_
+    )
+  }
+}
+
+clusters <- tibble(raw_tool = list.dirs(benchmarking_root, recursive = FALSE) %>% basename()) %>%
+  mutate(tool_dir = file.path(benchmarking_root, raw_tool)) %>%
+  mutate(cluster_dir = map(tool_dir, ~ list.dirs(.x, recursive = FALSE))) %>%
+  unnest(cluster_dir) %>%
+  filter(str_detect(basename(cluster_dir), "^cluster_")) %>%
+  mutate(
+    ref = str_detect(raw_tool, "_globdb$") | raw_tool == "galah_reference",
+    tool = str_remove(raw_tool, "_globdb$"),
+    size = str_extract(basename(cluster_dir), "(?<=cluster_)[^_]+") %>% as.integer(),
+    rep = str_extract(basename(cluster_dir), "(?<=_rep)[^.]+") %>% as.integer(),
+    n_clusters = pmap_int(list(ref, tool, cluster_dir), count_clusters)
+    ) %>%
+  select(tool, ref, size, rep, n_clusters)
+```
+
+## Benchmarking
+
+```{r benchmarking}
+output_subdir <- here(output_dir, "benchmarking")
+dir.create(output_subdir, recursive = TRUE)
+
+#-------------------------------------------------------------------------------
+# Helper: complete grid of all tool × size combinations
+# NA in any metric = tool did not finish at that size
+#-------------------------------------------------------------------------------
+size_levels <- sort(unique(benchmarking$size))
+
+bench_summary <- benchmarking %>%
+  filter(!ref) %>%
+  # Complete the grid so missing tool×size combos become explicit NAs
+  complete(tool, size) %>%
+  group_by(tool, size) %>%
+  summarise(
+    finished     = any(!is.na(s)),
+    mean_s       = mean(s,        na.rm = TRUE),
+    se_s         = sd(s,          na.rm = TRUE) / sqrt(sum(!is.na(s))),
+    mean_cpu     = mean(cpu_time, na.rm = TRUE),
+    se_cpu       = sd(cpu_time,   na.rm = TRUE) / sqrt(sum(!is.na(cpu_time))),
+    mean_rss     = mean(max_rss,  na.rm = TRUE),
+    se_rss       = sd(max_rss,    na.rm = TRUE) / sqrt(sum(!is.na(max_rss))),
+    .groups      = "drop"
+  ) %>%
+  mutate(
+    tool = factor(tool, levels = tool_levels, labels = tool_labels),
+    size = factor(size, levels = size_levels)
+  )
+
+# Rows where the tool did not finish — used for N/A annotations
+bench_na <- bench_summary %>% filter(!finished)
+
+#-------------------------------------------------------------------------------
+# Shared helper to add N/A text at the base of missing bars
+#-------------------------------------------------------------------------------
+na_annotation <- function(na_df) {
+  if (nrow(na_df) == 0) return(NULL)
+  geom_text(
+    data     = na_df,
+    aes(x = tool, y = 0, label = "N/A"),
+    vjust    = -0.4,
+    size     = 2,
+    colour   = "grey40",
+    fontface = "italic",
+    inherit.aes = FALSE
+  )
+}
+
+#-------------------------------------------------------------------------------
+# Wall-clock time (seconds)
+#-------------------------------------------------------------------------------
+p_bench_time <- bench_summary %>%
+  filter(finished) %>%
+  ggplot(aes(tool, mean_s / 3600, fill = tool)) +
+  geom_col(width = 0.7) +
+  geom_errorbar(
+    aes(ymin = (mean_s - se_s) / 3600, ymax = (mean_s + se_s) / 3600),
+    width = 0.2, linewidth = 0.4
+  ) +
+  na_annotation(bench_na) +
+  facet_wrap(~ size, nrow = 1) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.1))) +
+  scale_fill_manual(values = tool_colours) +
+  xlab("Tool") +
+  ylab("Wall-clock time (h)") +
+  theme_cowplot() +
+  theme(legend.position = "none",
+        axis.text.x = element_text(angle = 30, hjust = 1),
+        strip.background = element_blank())
+p_bench_time
+ggsave(here(output_subdir, "bench_time.png"), p_bench_time, width = 12, height = 4, dpi = 600)
+ggsave(here(output_subdir, "bench_time.svg"), p_bench_time, width = 12, height = 4, dpi = 600)
+
+#-------------------------------------------------------------------------------
+# CPU time (seconds)
+#-------------------------------------------------------------------------------
+p_bench_cpu <- bench_summary %>%
+  filter(finished) %>%
+  ggplot(aes(tool, mean_cpu / 3600, fill = tool)) +
+  geom_col(width = 0.7) +
+  geom_errorbar(
+    aes(ymin = (mean_cpu - se_cpu) / 3600, ymax = (mean_cpu + se_cpu) / 3600),
+    width = 0.2, linewidth = 0.4
+  ) +
+  na_annotation(bench_na) +
+  facet_wrap(~ size, nrow = 1) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.1))) +
+  scale_fill_manual(values = tool_colours) +
+  xlab("Tool") +
+  ylab("CPU time (h)") +
+  theme_cowplot() +
+  theme(legend.position = "none",
+        axis.text.x = element_text(angle = 30, hjust = 1),
+        strip.background = element_blank())
+p_bench_cpu
+ggsave(here(output_subdir, "bench_cpu.png"), p_bench_cpu, width = 12, height = 4, dpi = 600)
+ggsave(here(output_subdir, "bench_cpu.svg"), p_bench_cpu, width = 12, height = 4, dpi = 600)
+
+#-------------------------------------------------------------------------------
+# Peak memory (max RSS, converted MB → GB)
+#-------------------------------------------------------------------------------
+p_bench_mem <- bench_summary %>%
+  filter(finished) %>%
+  ggplot(aes(tool, mean_rss / 1024, fill = tool)) +
+  geom_col(width = 0.7) +
+  geom_errorbar(
+    aes(ymin = (mean_rss - se_rss) / 1024,
+        ymax = (mean_rss + se_rss) / 1024),
+    width = 0.2, linewidth = 0.4
+  ) +
+  na_annotation(bench_na) +
+  facet_wrap(~ size, nrow = 1) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.1))) +
+  scale_fill_manual(values = tool_colours) +
+  xlab("Tool") +
+  ylab("Peak memory (GB)") +
+  theme_cowplot() +
+  theme(legend.position = "none",
+        axis.text.x = element_text(angle = 30, hjust = 1),
+        strip.background = element_blank())
+p_bench_mem
+ggsave(here(output_subdir, "bench_mem.png"), p_bench_mem, width = 12, height = 4, dpi = 600)
+ggsave(here(output_subdir, "bench_mem.svg"), p_bench_mem, width = 12, height = 4, dpi = 600)
+```
+
+```{r benchmarking-summary-figure}
+#-------------------------------------------------------------------------------
+# Benchmarking summary figure
+#-------------------------------------------------------------------------------
+bench_fig <- plot_grid(
+  p_bench_time +
+    theme_cowplot(font_size = 7) +
+    theme(legend.position = "none",
+          axis.text.x = element_blank(),
+          axis.title.x = element_blank(),
+          strip.background = element_blank(),
+          plot.margin = margin(5, 5, 5, 25)),
+  p_bench_cpu +
+    theme_cowplot(font_size = 7) +
+    theme(legend.position = "none",
+          axis.text.x = element_blank(),
+          axis.title.x = element_blank(),
+          strip.text = element_blank(),
+          strip.background = element_blank(),
+          plot.margin = margin(5, 5, 5, 25)),
+  p_bench_mem +
+    theme_cowplot(font_size = 7) +
+    theme(legend.position = "none",
+          axis.text.x = element_text(angle = 30, hjust = 1),
+          strip.text = element_blank(),
+          strip.background = element_blank(),
+          plot.margin = margin(5, 5, 5, 25)),
+  ncol = 1,
+  labels = c("a", "b", "c"),
+  align = "v",
+  rel_heights = c(1.2, 1, 1.4)
+)
+bench_fig
+ggsave(here(output_dir, "benchmarking_summary_figure.png"), bench_fig, dpi = 600, width = 180, height = 180, units = "mm")
+ggsave(here(output_dir, "benchmarking_summary_figure.svg"), bench_fig, dpi = 600, width = 180, height = 180, units = "mm")
+```
+
+## Reference-based benchmarking (GlobDB)
+
+```{r benchmarking-globdb}
+output_subdir_globdb <- here(output_dir, "benchmarking_globdb")
+dir.create(output_subdir_globdb, recursive = TRUE)
+
+bench_summary_globdb <- benchmarking %>%
+  filter(ref) %>%
+  # Complete the grid so missing tool×size combos become explicit NAs
+  complete(tool, size) %>%
+  group_by(tool, size) %>%
+  summarise(
+    finished     = any(!is.na(s)),
+    mean_s       = mean(s,        na.rm = TRUE),
+    se_s         = sd(s,          na.rm = TRUE) / sqrt(sum(!is.na(s))),
+    mean_cpu     = mean(cpu_time, na.rm = TRUE),
+    se_cpu       = sd(cpu_time,   na.rm = TRUE) / sqrt(sum(!is.na(cpu_time))),
+    mean_rss     = mean(max_rss,  na.rm = TRUE),
+    se_rss       = sd(max_rss,    na.rm = TRUE) / sqrt(sum(!is.na(max_rss))),
+    .groups      = "drop"
+  ) %>%
+  mutate(
+    tool = factor(tool, levels = tool_levels, labels = tool_labels),
+    size = factor(size, levels = size_levels)
+  )
+
+# Rows where the tool did not finish — used for N/A annotations
+bench_na_globdb <- bench_summary_globdb %>% filter(!finished)
+
+#-------------------------------------------------------------------------------
+# Wall-clock time (seconds)
+#-------------------------------------------------------------------------------
+p_bench_time_globdb <- bench_summary_globdb %>%
+  filter(finished) %>%
+  ggplot(aes(tool, mean_s / 3600, fill = tool)) +
+  geom_col(width = 0.7) +
+  geom_errorbar(
+    aes(ymin = (mean_s - se_s) / 3600, ymax = (mean_s + se_s) / 3600),
+    width = 0.2, linewidth = 0.4
+  ) +
+  na_annotation(bench_na_globdb) +
+  facet_wrap(~ size, nrow = 1,
+             labeller = labeller(size = function(x) paste0(x, "\n(+346,233 ref)"))) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.1))) +
+  scale_fill_manual(values = tool_colours) +
+  xlab("Tool") +
+  ylab("Wall-clock time (h)") +
+  theme_cowplot() +
+  theme(legend.position = "none",
+        axis.text.x = element_text(angle = 30, hjust = 1),
+        strip.background = element_blank())
+p_bench_time_globdb
+ggsave(here(output_subdir_globdb, "bench_time.png"), p_bench_time_globdb, width = 12, height = 4, dpi = 600)
+ggsave(here(output_subdir_globdb, "bench_time.svg"), p_bench_time_globdb, width = 12, height = 4, dpi = 600)
+
+#-------------------------------------------------------------------------------
+# CPU time (seconds)
+#-------------------------------------------------------------------------------
+p_bench_cpu_globdb <- bench_summary_globdb %>%
+  filter(finished) %>%
+  ggplot(aes(tool, mean_cpu / 3600, fill = tool)) +
+  geom_col(width = 0.7) +
+  geom_errorbar(
+    aes(ymin = (mean_cpu - se_cpu) / 3600, ymax = (mean_cpu + se_cpu) / 3600),
+    width = 0.2, linewidth = 0.4
+  ) +
+  na_annotation(bench_na_globdb) +
+  facet_wrap(~ size, nrow = 1,
+             labeller = labeller(size = function(x) paste0(x, "\n(+346,233 ref)"))) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.1))) +
+  scale_fill_manual(values = tool_colours) +
+  xlab("Tool") +
+  ylab("CPU time (h)") +
+  theme_cowplot() +
+  theme(legend.position = "none",
+        axis.text.x = element_text(angle = 30, hjust = 1),
+        strip.background = element_blank())
+p_bench_cpu_globdb
+ggsave(here(output_subdir_globdb, "bench_cpu.png"), p_bench_cpu_globdb, width = 12, height = 4, dpi = 600)
+ggsave(here(output_subdir_globdb, "bench_cpu.svg"), p_bench_cpu_globdb, width = 12, height = 4, dpi = 600)
+
+#-------------------------------------------------------------------------------
+# Peak memory (max RSS, converted MB → GB)
+#-------------------------------------------------------------------------------
+p_bench_mem_globdb <- bench_summary_globdb %>%
+  filter(finished) %>%
+  ggplot(aes(tool, mean_rss / 1024, fill = tool)) +
+  geom_col(width = 0.7) +
+  geom_errorbar(
+    aes(ymin = (mean_rss - se_rss) / 1024,
+        ymax = (mean_rss + se_rss) / 1024),
+    width = 0.2, linewidth = 0.4
+  ) +
+  na_annotation(bench_na_globdb) +
+  facet_wrap(~ size, nrow = 1,
+             labeller = labeller(size = function(x) paste0(x, "\n(+346,233 ref)"))) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.1))) +
+  scale_fill_manual(values = tool_colours) +
+  xlab("Tool") +
+  ylab("Peak memory (GB)") +
+  theme_cowplot() +
+  theme(legend.position = "none",
+        axis.text.x = element_text(angle = 30, hjust = 1),
+        strip.background = element_blank())
+p_bench_mem_globdb
+ggsave(here(output_subdir_globdb, "bench_mem.png"), p_bench_mem_globdb, width = 12, height = 4, dpi = 600)
+ggsave(here(output_subdir_globdb, "bench_mem.svg"), p_bench_mem_globdb, width = 12, height = 4, dpi = 600)
+
+```
+
+```{r benchmarking-summary-figure-globdb}
+#-------------------------------------------------------------------------------
+# Reference-based benchmarking summary figure
+#-------------------------------------------------------------------------------
+bench_fig_globdb <- plot_grid(
+  p_bench_time_globdb +
+    theme_cowplot(font_size = 7) +
+    theme(legend.position = "none",
+          axis.text.x = element_blank(),
+          axis.title.x = element_blank(),
+          strip.background = element_blank(),
+          plot.margin = margin(5, 5, 5, 25)),
+  p_bench_cpu_globdb +
+    theme_cowplot(font_size = 7) +
+    theme(legend.position = "none",
+          axis.text.x = element_blank(),
+          axis.title.x = element_blank(),
+          strip.text = element_blank(),
+          strip.background = element_blank(),
+          plot.margin = margin(5, 5, 5, 25)),
+  p_bench_mem_globdb +
+    theme_cowplot(font_size = 7) +
+    theme(legend.position = "none",
+          axis.text.x = element_text(angle = 30, hjust = 1),
+          strip.text = element_blank(),
+          strip.background = element_blank(),
+          plot.margin = margin(5, 5, 5, 25)),
+  ncol = 1,
+  labels = c("a", "b", "c"),
+  align = "v",
+  rel_heights = c(1.3, 1, 1.4)
+)
+bench_fig_globdb
+ggsave(here(output_dir, "benchmarking_summary_figure_globdb.png"), bench_fig_globdb, dpi = 600, width = 180, height = 180, units = "mm")
+ggsave(here(output_dir, "benchmarking_summary_figure_globdb.svg"), bench_fig_globdb, dpi = 600, width = 180, height = 180, units = "mm")
+```
+
+### Cluster counts
+
+```{r benchmarking-clusters}
+output_subdir_clusters <- here(output_dir, "clusters")
+dir.create(output_subdir_clusters, recursive = TRUE)
+
+clusters_average <- clusters %>%
+  group_by(ref, size, rep) %>%
+  summarise(
+    mean_n   = mean(n_clusters, na.rm = TRUE),
+    .groups  = "drop"
+  )
+
+clusters_summary <- clusters %>%
+  left_join(clusters_average, by = c("ref", "size", "rep")) %>%
+  mutate(
+    prop_diff = 1 + (n_clusters - mean_n) / mean_n
+  ) %>%
+  group_by(tool, ref) %>%
+  summarise(
+    mean_n   = mean(prop_diff, na.rm = TRUE),
+    se_n     = sd(prop_diff,   na.rm = TRUE) / sqrt(sum(!is.na(prop_diff))),
+    .groups  = "drop"
+  ) %>%
+  mutate(
+    tool = factor(tool, levels = tool_levels, labels = tool_labels)
+  )
+
+p_clusters <- clusters_summary %>%
+  filter(!ref) %>%
+  ggplot(aes(tool, mean_n, fill = tool)) +
+  geom_col(width = 0.7) +
+  geom_errorbar(
+    aes(ymin = mean_n - se_n, ymax = mean_n + se_n),
+    width = 0.2, linewidth = 0.4
+  ) +
+  geom_hline(
+    aes(yintercept = 1),
+    linetype = "dashed", colour = "grey40", linewidth = 0.4
+  ) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.1))) +
+  scale_fill_manual(values = tool_colours) +
+  coord_cartesian(ylim = c(0.9, NA)) +
+  xlab("Tool") +
+  ylab("Normalised cluster count") +
+  theme_cowplot() +
+  theme(legend.position = "none",
+        axis.text.x = element_text(angle = 30, hjust = 1),
+        strip.background = element_blank())
+p_clusters
+ggsave(here(output_subdir_clusters, "benchmarking_clusters.png"), p_clusters, width = 12, height = 4, dpi = 600)
+ggsave(here(output_subdir_clusters, "benchmarking_clusters.svg"), p_clusters, width = 12, height = 4, dpi = 600)
+
+p_clusters_globdb <- clusters_summary %>%
+  filter(ref) %>%
+  ggplot(aes(tool, mean_n, fill = tool)) +
+  geom_col(width = 0.7) +
+  geom_errorbar(
+    aes(ymin = mean_n - se_n, ymax = mean_n + se_n),
+    width = 0.2, linewidth = 0.4
+  ) +
+  geom_hline(
+    aes(yintercept = 1),
+    linetype = "dashed", colour = "grey40", linewidth = 0.4
+  ) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.1))) +
+  scale_fill_manual(values = tool_colours) +
+  coord_cartesian(ylim = c(0.9, NA)) +
+  xlab("Tool") +
+  ylab("Normalised cluster count") +
+  theme_cowplot() +
+  theme(legend.position = "none",
+        axis.text.x = element_text(angle = 30, hjust = 1),
+        strip.background = element_blank())
+p_clusters_globdb
+ggsave(here(output_subdir_clusters, "benchmarking_clusters_globdb.png"), p_clusters_globdb, width = 12, height = 4, dpi = 600)
+ggsave(here(output_subdir_clusters, "benchmarking_clusters_globdb.svg"), p_clusters_globdb, width = 12, height = 4, dpi = 600)
+```
+
+```{r benchmarking-clusters-summary-figure}
+# -------------------------------------------------------------------------------
+# Clustering benchmarking summary figure
+# -------------------------------------------------------------------------------
+cluster_bench_fig <- plot_grid(
+  p_clusters +
+    theme_cowplot(font_size = 7) +
+    theme(legend.position = "none",
+          axis.text.x = element_text(angle = 30, hjust = 1),
+          axis.title.x = element_blank(),
+          plot.margin = margin(5, 5, 5, 25)),
+  p_clusters_globdb +
+    theme_cowplot(font_size = 7) +
+    theme(legend.position = "none",
+          axis.text.x = element_text(angle = 30, hjust = 1),
+          plot.margin = margin(5, 5, 5, 25)),
+  ncol = 2,
+  labels = c("a", "b"),
+  align = "h"
+)
+cluster_bench_fig
+ggsave(here(output_dir, "benchmarking_clusters_summary_figure.png"), cluster_bench_fig, dpi = 600, width = 180, height = 90, units = "mm")
+ggsave(here(output_dir, "benchmarking_clusters_summary_figure.svg"), cluster_bench_fig, dpi = 600, width = 180, height = 90, units = "mm")
+```
