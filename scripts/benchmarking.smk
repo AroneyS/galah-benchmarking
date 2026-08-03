@@ -3,7 +3,7 @@ Dereplication benchmarking pipeline
 
 pixi run snakemake \
     --snakefile scripts/benchmarking.smk \
-    --directory results/benchmarking/20260618 \
+    --directory results \
     --profile aqua \
     --keep-going --rerun-triggers mtime --cores 64 --local-cores 1
 """
@@ -15,6 +15,7 @@ GENOME_COUNTS = [100, 500, 1000, 5000, 10000, 50000]
 REPEATS = list(range(1, 6))
 TMPDIR = "/scratch/microbiome/aroneys/tmp"
 
+# Genomes are sourced from https://doi.org/10.1038/s41592-025-02901-1
 genomes = (
     pl.read_csv("/work/microbiome/ibis/SRA_genomes/compiled/genome_metadata.tsv", separator="\t")
     .filter(pl.col("completeness") - 5 * pl.col("contamination") >= 50)
@@ -154,6 +155,7 @@ rule galah:
         "--genome-fasta-list {input} "
         "--ani 95 "
         "--min-aligned-fraction 15 "
+        "--skip-sanitise-headers "
         "--output-cluster-definition {output}/clusters.tsv "
         "--threads {threads} "
         "&> {log} "
@@ -179,6 +181,7 @@ rule galah_low_memory:
         "--genome-fasta-list {input} "
         "--ani 95 "
         "--min-aligned-fraction 15 "
+        "--skip-sanitise-headers "
         "--output-cluster-definition {output}/clusters.tsv "
         "--threads {threads} "
         "--low-memory "
@@ -240,8 +243,6 @@ rule pyani_ANIm:
         "pixi run -e pyani "
         "pyani-plus classify "
         "--database {output}/pyani.db "
-        # "--ani 95 "
-        # "--min-aligned-fraction 15 "
         "--outdir {output}/classify "
         "&>> {log} "
 
@@ -299,6 +300,7 @@ rule galah_globdb:
         "--genome-fasta-list {input} "
         "--ani 95 "
         "--min-aligned-fraction 15 "
+        "--skip-sanitise-headers "
         "--output-cluster-definition {output}/clusters.tsv "
         "--threads {threads} "
         "&> {log} "
@@ -324,6 +326,7 @@ rule galah_low_memory_globdb:
         "--genome-fasta-list {input} "
         "--ani 95 "
         "--min-aligned-fraction 15 "
+        "--skip-sanitise-headers "
         "--output-cluster-definition {output}/clusters.tsv "
         "--threads {threads} "
         "--low-memory "
@@ -406,13 +409,13 @@ rule galah_reference:
     shell:
         "mkdir -p {output} && "
         "TMPDIR={TMPDIR} "
-        # "pixi run -e galah "
-        # "galah cluster "
-        "pixi run --manifest-path ~/src/galah/pixi.toml cargo run --manifest-path ~/src/galah/Cargo.toml -- cluster "
+        "pixi run -e galah "
+        "galah cluster "
         "--genome-fasta-list {input.genomes} "
         "--reference-genomes-list {input.reference} "
         "--ani 95 "
         "--min-aligned-fraction 15 "
+        "--skip-sanitise-headers "
         "--output-cluster-definition {output}/clusters.tsv "
         "--threads {threads} "
         "&> {log} "

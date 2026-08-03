@@ -1,0 +1,81 @@
+<?xml version='1.0' encoding='UTF-8' ?>
+<svg xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' width='864.00pt' height='288.00pt' viewBox='0 0 864.00 288.00'>
+<g class='svglite'>
+<defs>
+  <style type='text/css'><![CDATA[
+    .svglite line, .svglite polyline, .svglite polygon, .svglite path, .svglite rect, .svglite circle {
+      fill: none;
+      stroke: #000000;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      stroke-miterlimit: 10.00;
+    }
+    .svglite text {
+      white-space: pre;
+    }
+    .svglite g.glyphgroup path {
+      fill: inherit;
+      stroke: none;
+    }
+  ]]></style>
+</defs>
+<rect width='100%' height='100%' style='stroke: none; fill: none;'/>
+<defs>
+  <clipPath id='cpMC4wMHw4NjQuMDB8MC4wMHwyODguMDA='>
+    <rect x='0.00' y='0.00' width='864.00' height='288.00' />
+  </clipPath>
+</defs>
+<g clip-path='url(#cpMC4wMHw4NjQuMDB8MC4wMHwyODguMDA=)'>
+</g>
+<defs>
+  <clipPath id='cpNTYuNzh8ODU3LjAzfDYuOTd8MTg3Ljc1'>
+    <rect x='56.78' y='6.97' width='800.24' height='180.78' />
+  </clipPath>
+</defs>
+<g clip-path='url(#cpNTYuNzh8ODU3LjAzfDYuOTd8MTg3Ljc1)'>
+<rect x='556.93' y='63.60' width='107.73' height='1283.71' style='stroke-width: 1.36; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #EE3377;' />
+<rect x='95.26' y='62.80' width='107.73' height='1284.51' style='stroke-width: 1.36; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #CC3311;' />
+<rect x='249.15' y='62.80' width='107.73' height='1284.51' style='stroke-width: 1.36; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #0077BB;' />
+<rect x='710.83' y='27.79' width='107.73' height='1319.52' style='stroke-width: 1.36; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #EE7733;' />
+<rect x='403.04' y='62.79' width='107.73' height='1284.52' style='stroke-width: 1.36; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #009988;' />
+<polyline points='595.41,62.59 626.19,62.59 ' style='stroke-width: 0.85; stroke-linecap: butt;' />
+<polyline points='610.80,62.59 610.80,64.61 ' style='stroke-width: 0.85; stroke-linecap: butt;' />
+<polyline points='595.41,64.61 626.19,64.61 ' style='stroke-width: 0.85; stroke-linecap: butt;' />
+<polyline points='133.73,61.90 164.51,61.90 ' style='stroke-width: 0.85; stroke-linecap: butt;' />
+<polyline points='149.12,61.90 149.12,63.70 ' style='stroke-width: 0.85; stroke-linecap: butt;' />
+<polyline points='133.73,63.70 164.51,63.70 ' style='stroke-width: 0.85; stroke-linecap: butt;' />
+<polyline points='287.62,61.90 318.40,61.90 ' style='stroke-width: 0.85; stroke-linecap: butt;' />
+<polyline points='303.01,61.90 303.01,63.70 ' style='stroke-width: 0.85; stroke-linecap: butt;' />
+<polyline points='287.62,63.70 318.40,63.70 ' style='stroke-width: 0.85; stroke-linecap: butt;' />
+<polyline points='749.30,23.41 780.08,23.41 ' style='stroke-width: 0.85; stroke-linecap: butt;' />
+<polyline points='764.69,23.41 764.69,32.17 ' style='stroke-width: 0.85; stroke-linecap: butt;' />
+<polyline points='749.30,32.17 780.08,32.17 ' style='stroke-width: 0.85; stroke-linecap: butt;' />
+<polyline points='441.51,61.89 472.29,61.89 ' style='stroke-width: 0.85; stroke-linecap: butt;' />
+<polyline points='456.90,61.89 456.90,63.69 ' style='stroke-width: 0.85; stroke-linecap: butt;' />
+<polyline points='441.51,63.69 472.29,63.69 ' style='stroke-width: 0.85; stroke-linecap: butt;' />
+<line x1='56.78' y1='58.91' x2='857.03' y2='58.91' style='stroke-width: 0.85; stroke: #666666; stroke-dasharray: 4.55,4.55; stroke-linecap: butt;' />
+</g>
+<g clip-path='url(#cpMC4wMHw4NjQuMDB8MC4wMHwyODguMDA=)'>
+<polyline points='56.78,187.75 56.78,6.97 ' style='stroke-width: 1.07; stroke-linecap: square;' />
+<text x='50.31' y='192.13' text-anchor='end' style='font-size: 12.00px; font-family: "DejaVu Sans";' textLength='26.73px' lengthAdjust='spacingAndGlyphs'>0.90</text>
+<text x='50.31' y='127.71' text-anchor='end' style='font-size: 12.00px; font-family: "DejaVu Sans";' textLength='26.73px' lengthAdjust='spacingAndGlyphs'>0.95</text>
+<text x='50.31' y='63.29' text-anchor='end' style='font-size: 12.00px; font-family: "DejaVu Sans";' textLength='26.73px' lengthAdjust='spacingAndGlyphs'>1.00</text>
+<polyline points='53.30,187.75 56.78,187.75 ' style='stroke-width: 1.07; stroke-linecap: butt;' />
+<polyline points='53.30,123.33 56.78,123.33 ' style='stroke-width: 1.07; stroke-linecap: butt;' />
+<polyline points='53.30,58.91 56.78,58.91 ' style='stroke-width: 1.07; stroke-linecap: butt;' />
+<polyline points='56.78,187.75 857.03,187.75 ' style='stroke-width: 1.07; stroke-linecap: square;' />
+<polyline points='149.12,191.24 149.12,187.75 ' style='stroke-width: 1.07; stroke-linecap: butt;' />
+<polyline points='303.01,191.24 303.01,187.75 ' style='stroke-width: 1.07; stroke-linecap: butt;' />
+<polyline points='456.90,191.24 456.90,187.75 ' style='stroke-width: 1.07; stroke-linecap: butt;' />
+<polyline points='610.80,191.24 610.80,187.75 ' style='stroke-width: 1.07; stroke-linecap: butt;' />
+<polyline points='764.69,191.24 764.69,187.75 ' style='stroke-width: 1.07; stroke-linecap: butt;' />
+<text transform='translate(153.49,201.80) rotate(-30)' text-anchor='end' style='font-size: 12.00px; font-family: "DejaVu Sans";' textLength='33.28px' lengthAdjust='spacingAndGlyphs'>galah</text>
+<text transform='translate(307.39,201.80) rotate(-30)' text-anchor='end' style='font-size: 12.00px; font-family: "DejaVu Sans";' textLength='120.92px' lengthAdjust='spacingAndGlyphs'>galah (low memory)</text>
+<text transform='translate(461.28,201.80) rotate(-30)' text-anchor='end' style='font-size: 12.00px; font-family: "DejaVu Sans";' textLength='88.16px' lengthAdjust='spacingAndGlyphs'>skder (greedy)</text>
+<text transform='translate(615.17,201.80) rotate(-30)' text-anchor='end' style='font-size: 12.00px; font-family: "DejaVu Sans";' textLength='74.94px' lengthAdjust='spacingAndGlyphs'>dRep (skani)</text>
+<text transform='translate(769.06,201.80) rotate(-30)' text-anchor='end' style='font-size: 12.00px; font-family: "DejaVu Sans";' textLength='78.64px' lengthAdjust='spacingAndGlyphs'>pyani (ANIm)</text>
+<text x='456.90' y='278.12' text-anchor='middle' style='font-size: 14.00px; font-family: "DejaVu Sans";' textLength='27.19px' lengthAdjust='spacingAndGlyphs'>Tool</text>
+<text transform='translate(17.18,97.36) rotate(-90)' text-anchor='middle' style='font-size: 14.00px; font-family: "DejaVu Sans";' textLength='175.34px' lengthAdjust='spacingAndGlyphs'>Normalised cluster count</text>
+</g>
+</g>
+</svg>

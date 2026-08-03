@@ -18,7 +18,7 @@ library(here)
 
 theme_set(theme_cowplot(font_family = "sans"))
 
-output_dir <- here("results", "benchmarking_qmd", "20260727")
+output_dir <- here("figures")
 dir.create(output_dir, recursive = TRUE)
 
 # Colour Brewer paired palette
@@ -42,7 +42,7 @@ tool_colours <- setNames(vibrant_colours[seq_len(length(tool_labels))], tool_lab
 genomes_metadata <- read_tsv("/work/microbiome/ibis/SRA_genomes/compiled/genome_metadata.tsv") %>%
   filter(completeness - 5 * contamination >= 50)
 
-benchmarking_root <- here("results", "benchmarking", "20260618")
+benchmarking_root <- here("results")
 
 # Total genomes in the GlobDB r232 reference set, added to every sample in
 # the reference-based (GlobDB) runs.
@@ -144,6 +144,70 @@ clusters <- tibble(raw_tool = list.dirs(benchmarking_root, recursive = FALSE) %>
     n_clusters = pmap_int(list(ref, tool, cluster_dir), count_clusters)
     ) %>%
   select(tool, ref, size, rep, n_clusters)
+
+clusters_average <- clusters %>%
+  group_by(ref, size, rep) %>%
+  summarise(
+    mean_n   = mean(n_clusters, na.rm = TRUE),
+    .groups  = "drop"
+  )
+
+clusters_summary <- clusters %>%
+  left_join(clusters_average, by = c("ref", "size", "rep")) %>%
+  mutate(
+    prop_diff = 1 + (n_clusters - mean_n) / mean_n
+  ) %>%
+  group_by(tool, ref) %>%
+  summarise(
+    mean_n   = mean(prop_diff, na.rm = TRUE),
+    se_n     = sd(prop_diff,   na.rm = TRUE) / sqrt(sum(!is.na(prop_diff))),
+    .groups  = "drop"
+  ) %>%
+  mutate(
+    tool = factor(tool, levels = tool_levels, labels = tool_labels)
+  )
+```
+
+```{r stats}
+# Range of walltime and memory usage for 50,000 genomes
+benchmarking %>%
+  filter(!ref, size == 50000) %>%
+  group_by(tool) %>%
+  summarise(
+    min_walltime = min(s, na.rm = TRUE) / 60,
+    max_walltime = max(s, na.rm = TRUE) / 60,
+    min_memory   = min(max_rss, na.rm = TRUE) / 1024,
+    max_memory   = max(max_rss, na.rm = TRUE) / 1024
+  ) %>%
+  arrange(desc(max_walltime))
+
+# Range of walltime and memory usage for 10,000 genomes
+benchmarking %>%
+  filter(!ref, size == 10000) %>%
+  group_by(tool) %>%
+  summarise(
+    min_walltime = min(s, na.rm = TRUE) / 60,
+    max_walltime = max(s, na.rm = TRUE) / 60,
+    min_memory   = min(max_rss, na.rm = TRUE) / 1024,
+    max_memory   = max(max_rss, na.rm = TRUE) / 1024
+  ) %>%
+  arrange(desc(max_walltime))
+
+# Range of walltime and memory usage for 50,000 genomes with GlobDB reference
+benchmarking %>%
+  filter(ref, size == 50000) %>%
+  group_by(tool) %>%
+  summarise(
+    min_walltime = min(s, na.rm = TRUE) / 60,
+    max_walltime = max(s, na.rm = TRUE) / 60,
+    min_memory   = min(max_rss, na.rm = TRUE) / 1024,
+    max_memory   = max(max_rss, na.rm = TRUE) / 1024
+  ) %>%
+  arrange(desc(max_walltime))
+
+# Summary of cluster counts
+clusters_summary %>%
+  arrange(ref, desc(mean_n))
 ```
 
 ## Benchmarking
@@ -463,28 +527,6 @@ ggsave(here(output_dir, "benchmarking_summary_figure_globdb.svg"), bench_fig_glo
 ```{r benchmarking-clusters}
 output_subdir_clusters <- here(output_dir, "clusters")
 dir.create(output_subdir_clusters, recursive = TRUE)
-
-clusters_average <- clusters %>%
-  group_by(ref, size, rep) %>%
-  summarise(
-    mean_n   = mean(n_clusters, na.rm = TRUE),
-    .groups  = "drop"
-  )
-
-clusters_summary <- clusters %>%
-  left_join(clusters_average, by = c("ref", "size", "rep")) %>%
-  mutate(
-    prop_diff = 1 + (n_clusters - mean_n) / mean_n
-  ) %>%
-  group_by(tool, ref) %>%
-  summarise(
-    mean_n   = mean(prop_diff, na.rm = TRUE),
-    se_n     = sd(prop_diff,   na.rm = TRUE) / sqrt(sum(!is.na(prop_diff))),
-    .groups  = "drop"
-  ) %>%
-  mutate(
-    tool = factor(tool, levels = tool_levels, labels = tool_labels)
-  )
 
 p_clusters <- clusters_summary %>%
   filter(!ref) %>%
